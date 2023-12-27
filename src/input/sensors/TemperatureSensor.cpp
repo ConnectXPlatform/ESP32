@@ -1,13 +1,15 @@
 #include "TemperatureSensor.h"
 
-TimedCachingTemperatureSensor::TimedCachingTemperatureSensor(ITemperatureSensor &tempSensor, unsigned long readingsInterval)
-    : decorated(tempSensor), readingsInterval(readingsInterval)
-{
-}
+TemperatureSensorDecorator::TemperatureSensorDecorator(ITemperatureSensor &tempSensor)
+    : decorated(tempSensor) {}
+void TemperatureSensorDecorator::init() { decorated.init(); }
+const bool TemperatureSensorDecorator::refreshData(bool block) { return decorated.refreshData(block); }
+const bool TemperatureSensorDecorator::isRefreshCompleted() { return decorated.isRefreshCompleted(); }
+std::vector<TemperatureReading> TemperatureSensorDecorator::getReadings() { return decorated.getReadings(); }
 
-void TimedCachingTemperatureSensor::init()
+TimedCachingTemperatureSensor::TimedCachingTemperatureSensor(ITemperatureSensor &tempSensor, unsigned long readingsInterval)
+    : TemperatureSensorDecorator(tempSensor), readingsInterval(readingsInterval)
 {
-    decorated.init();
 }
 
 const bool TimedCachingTemperatureSensor::refreshData(bool block)

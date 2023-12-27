@@ -37,21 +37,35 @@ public:
     virtual std::vector<TemperatureReading> getReadings() = 0;
 };
 
-class TimedCachingTemperatureSensor : public ITemperatureSensor
+class TemperatureSensorDecorator : public ITemperatureSensor
+{
+public:
+    virtual void init() override;
+
+    virtual const bool refreshData(bool block = true) override;
+
+    virtual const bool isRefreshCompleted() override;
+
+    virtual std::vector<TemperatureReading> getReadings() override;
+
+protected:
+    ITemperatureSensor &decorated;
+
+    TemperatureSensorDecorator(ITemperatureSensor &tempSensor);
+};
+
+class TimedCachingTemperatureSensor : public TemperatureSensorDecorator
 {
 public:
     TimedCachingTemperatureSensor(ITemperatureSensor &tempSensor, unsigned long readingsInterval);
-
-    void init() override;
 
     const bool refreshData(bool block = true) override;
 
     const bool isRefreshCompleted() override;
 
-    virtual std::vector<TemperatureReading> getReadings() override;
+    std::vector<TemperatureReading> getReadings() override;
 
 private:
-    ITemperatureSensor &decorated;
     unsigned long lastReadingTime;
     unsigned long readingsInterval;
     std::vector<TemperatureReading> latestData;
