@@ -21,10 +21,12 @@ class AddressMappingTemperatureSensor : public TemperatureSensorDecorator
 {
 public:
 
-    AddressMappingTemperatureSensor(ITemperatureSensor& tempSensor, std::map<String, String> &addressToLabel);
+    AddressMappingTemperatureSensor(ITemperatureSensor& tempSensor);
 
     std::vector<TemperatureReading> getReadings() override;
 
+    void setAddressToLabelMap(std::map<String, String> &map);
+
 private:
-    std::map<String, String> &addressToLabel;
+    std::map<String, String> addressToLabel;
 };

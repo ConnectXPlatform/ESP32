@@ -48,8 +48,8 @@ void TemperaturesScreen::showTemperatures(const std::vector<TemperatureReading> 
     }
 }
 
-AddressMappingTemperatureSensor::AddressMappingTemperatureSensor(ITemperatureSensor &tempSensor, std::map<String, String> &addressToLabel)
-    : TemperatureSensorDecorator(tempSensor), addressToLabel(addressToLabel)
+AddressMappingTemperatureSensor::AddressMappingTemperatureSensor(ITemperatureSensor &tempSensor)
+    : TemperatureSensorDecorator(tempSensor)
 {
 }
 
@@ -70,4 +70,9 @@ std::vector<TemperatureReading> AddressMappingTemperatureSensor::getReadings()
     }
 
     return readings;
+}
+
+void AddressMappingTemperatureSensor::setAddressToLabelMap(std::map<String, String> &map)
+{
+    addressToLabel = map;
 }
