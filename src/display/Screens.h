@@ -21,6 +21,8 @@ protected:
 class SetupScreen : public Screen
 {
 public:
+    SetupScreen(DisplayHandler &displayHandler) : Screen(displayHandler) {}
+
     void addStep(const char *step);
 
     void stepCompleted();
