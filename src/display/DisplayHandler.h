@@ -11,7 +11,6 @@ enum TextSize
 class DisplayHandler
 {
 public:
-    DisplayHandler();
     /// @brief Initializes the display and shows an empty screen.
     virtual void init() = 0;
     /// @brief Shows an empty screen.
