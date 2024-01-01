@@ -4,6 +4,10 @@
 ButtonHandler::ButtonHandler(const uint8_t buttonPin, const unsigned long maxPressTime)
     : buttonPin(buttonPin), maxPressTime(maxPressTime), onPressCallback(nullptr), onReleaseCallback(nullptr), isPressed(false)
 {
+}
+
+void ButtonHandler::init()
+{
     pinMode(buttonPin, INPUT_PULLUP);
 }
 

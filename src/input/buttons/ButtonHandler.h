@@ -5,6 +5,7 @@ class ButtonHandler
 {
 public:
     ButtonHandler(const uint8_t buttonPin, const unsigned long maxPressTime);
+    void init();
     void setOnPressedCallback(std::function<void()>);
     void setOnReleasedCallback(std::function<void()>);
     void pinStateChanged(); // Since we can't attach interrupt from inside the class, we need to call this from another script.
