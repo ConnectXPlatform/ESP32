@@ -1,7 +1,7 @@
 #include <Arduino.h>
 #include "TasksQueue.h"
 
-void TasksQueue::initialize(BaseType_t coreId)
+void TasksQueue::start(BaseType_t coreId)
 {
     xTaskCreateUniversal(taskUpdateHandler, "tasks queue", getArduinoLoopTaskStackSize(), this, 1, NULL, coreId);
 }

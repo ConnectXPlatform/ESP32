@@ -25,7 +25,7 @@ public:
         return instance;
     }
 
-    void initialize(BaseType_t coreId = 1 - ARDUINO_RUNNING_CORE);
+    void start(BaseType_t coreId = 1 - ARDUINO_RUNNING_CORE);
 
     void enqueueTask(Task &task);
 
