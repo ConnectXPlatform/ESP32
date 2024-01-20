@@ -1,5 +1,5 @@
 #include "ArduinoJson.h"
-#include "TemperaturesViewer.h"
+#include "TemperatureHandlingComponents.h"
 
 #define TEXT_LEFT_PADDING 5
 #define TEXT_TOP_PADDING 10
