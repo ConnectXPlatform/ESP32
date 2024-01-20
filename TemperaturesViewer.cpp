@@ -1,3 +1,4 @@
+#include "ArduinoJson.h"
 #include "TemperaturesViewer.h"
 
 #define TEXT_LEFT_PADDING 5
@@ -53,9 +54,9 @@ AddressMappingTemperatureSensor::AddressMappingTemperatureSensor(ITemperatureSen
 {
 }
 
-std::vector<TemperatureReading> AddressMappingTemperatureSensor::getReadings()
+void AddressMappingTemperatureSensor::getReadings(std::vector<TemperatureReading> &readings)
 {
-    std::vector<TemperatureReading> readings = decorated.getReadings();
+    decorated.getReadings(readings);
 
     for (size_t i = 0; i < readings.size(); i++)
     {
@@ -65,14 +66,73 @@ std::vector<TemperatureReading> AddressMappingTemperatureSensor::getReadings()
         if (it != addressToLabel.end())
         {
             // Use the mapped label if available.
-            reading.sensorAddress = it->second;
+            strcpy(reading.sensorAddress, it->second.c_str());
         }
     }
-
-    return readings;
 }
 
 void AddressMappingTemperatureSensor::setAddressToLabelMap(std::map<String, String> &map)
 {
     addressToLabel = map;
+}
+
+TemperatureRequestTask::TemperatureRequestTask(ITemperatureSensor &tempSensor)
+    : temperatureSensor(tempSensor)
+{
+}
+
+void TemperatureRequestTask::start()
+{
+    temperatureSensor.refreshData(false);
+}
+
+bool TemperatureRequestTask::update()
+{
+    return temperatureSensor.isRefreshCompleted();
+}
+
+SendTempsDataTask::SendTempsDataTask(ITemperatureSensor &temperatureSensor, const TempsRequestPayload &requestSettings, std::function<void(String, bool isLastChunk)> sendFunction)
+    : temperatureSensor(temperatureSensor), sendFunction(sendFunction), chunkSize(requestSettings.chunkSize), jsonDocument(96 * requestSettings.chunkSize)
+{
+}
+
+void SendTempsDataTask::start()
+{
+    chunkIndex = 0;
+    temperatureSensor.getReadings(data);
+    numChunks = (data.size() + chunkSize - 1) / chunkSize;
+}
+
+bool SendTempsDataTask::update()
+{
+    // Clear the old data before adding new data.
+    jsonDocument.clear();
+    serializedChunk.clear();
+    if (chunkIndex == numChunks)
+    {
+        return true;
+    }
+
+    size_t startIdx = chunkIndex * chunkSize;
+    size_t endIdx = min((chunkIndex + 1) * chunkSize, data.size());
+
+    // Create a JsonArray within the document to hold the chunk of readings.
+    JsonArray array = jsonDocument.to<JsonArray>();
+
+    // Add the chunk of readings to the JsonArray.
+    for (size_t i = startIdx; i < endIdx; i++)
+    {
+        JsonObject readingObject = array.createNestedObject();
+        TemperatureReading &reading = data[i];
+        readingObject["address"] = reading.sensorAddress;
+        readingObject["value"] = reading.temperatureValue;
+        readingObject["unit"] = static_cast<int>(reading.unit);
+    }
+
+    // Serialize the JsonArray to a string.
+    serializeJson(jsonDocument, serializedChunk);
+    chunkIndex++;
+    sendFunction(serializedChunk, chunkIndex == numChunks);
+
+    return false;
 }
