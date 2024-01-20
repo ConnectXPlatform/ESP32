@@ -5,7 +5,7 @@ TemperatureSensorDecorator::TemperatureSensorDecorator(ITemperatureSensor &tempS
 void TemperatureSensorDecorator::init() { decorated.init(); }
 const bool TemperatureSensorDecorator::refreshData(bool block) { return decorated.refreshData(block); }
 const bool TemperatureSensorDecorator::isRefreshCompleted() { return decorated.isRefreshCompleted(); }
-std::vector<TemperatureReading> TemperatureSensorDecorator::getReadings() { return decorated.getReadings(); }
+void TemperatureSensorDecorator::getReadings(std::vector<TemperatureReading> &readings) { decorated.getReadings(readings); }
 
 TimedCachingTemperatureSensor::TimedCachingTemperatureSensor(ITemperatureSensor &tempSensor, unsigned long readingsInterval)
     : TemperatureSensorDecorator(tempSensor), readingsInterval(readingsInterval)
@@ -14,26 +14,28 @@ TimedCachingTemperatureSensor::TimedCachingTemperatureSensor(ITemperatureSensor 
 
 const bool TimedCachingTemperatureSensor::refreshData(bool block)
 {
-    if (millis() >= lastReadingTime + readingsInterval)
+    if (latestData.size() == 0 || millis() >= lastReadingTime + readingsInterval)
     {
         decorated.refreshData(block);
         lastReadingTime = millis();
-        issuedAReading = true;
+        retrievingNewData = true;
     }
     return isRefreshCompleted();
 }
 
 const bool TimedCachingTemperatureSensor::isRefreshCompleted()
 {
-    return !issuedAReading || decorated.isRefreshCompleted();
+    return !retrievingNewData || decorated.isRefreshCompleted();
 }
 
-std::vector<TemperatureReading> TimedCachingTemperatureSensor::getReadings()
+void TimedCachingTemperatureSensor::getReadings(std::vector<TemperatureReading> &readings)
 {
-    if (issuedAReading)
+    if (retrievingNewData)
     {
-        latestData = decorated.getReadings();
-        issuedAReading = false;
+        // Clear the old cached data
+        latestData.clear();
+        decorated.getReadings(latestData);
+        retrievingNewData = false;
     }
-    return latestData;
+    readings = latestData;
 }

@@ -9,7 +9,7 @@ enum Unit
 };
 struct TemperatureReading
 {
-    String sensorAddress;   // Address or identifier of the sensor.
+    char sensorAddress[50]; // Address or identifier of the sensor.
     float temperatureValue; // Temperature value.
     Unit unit;              // The value's unit of measurement.
 };
@@ -34,7 +34,7 @@ public:
 
     /// @brief Retrieves all temperature readings from this sensor.
     /// @return A vector of `TemperatureReading` objects, each representing a temperature reading from this sensor.
-    virtual std::vector<TemperatureReading> getReadings() = 0;
+    virtual void getReadings(std::vector<TemperatureReading> &readings) = 0;
 };
 
 class TemperatureSensorDecorator : public ITemperatureSensor
@@ -46,7 +46,7 @@ public:
 
     virtual const bool isRefreshCompleted() override;
 
-    virtual std::vector<TemperatureReading> getReadings() override;
+    virtual void getReadings(std::vector<TemperatureReading> &readings) override;
 
 protected:
     ITemperatureSensor &decorated;
@@ -63,11 +63,11 @@ public:
 
     const bool isRefreshCompleted() override;
 
-    std::vector<TemperatureReading> getReadings() override;
+    void getReadings(std::vector<TemperatureReading> &readings) override;
 
 private:
     unsigned long lastReadingTime;
     unsigned long readingsInterval;
     std::vector<TemperatureReading> latestData;
-    bool issuedAReading;
+    bool retrievingNewData;
 };

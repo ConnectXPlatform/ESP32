@@ -1,14 +1,12 @@
 #include <OneWire.h>
 #include "DallasTemperatureSensors.h"
 
-String deviceAddressToString(const uint8_t *address)
+void deviceAddressToString(const uint8_t *address, char output[17])
 {
-    char hexString[17] = {0};
     for (uint8_t i = 0, j = 0; i < 8; i++, j += 2)
     {
-        snprintf(hexString + j, 3, "%02X", address[i]);
+        snprintf(output + j, 3, "%02X", address[i]);
     }
-    return String(hexString);
 }
 
 DallasTemperatureSensors::DallasTemperatureSensors(uint8_t sensorsPin)
@@ -40,9 +38,9 @@ const bool DallasTemperatureSensors::isRefreshCompleted()
     return sensors.isConversionComplete();
 }
 
-std::vector<TemperatureReading> DallasTemperatureSensors::getReadings()
+void DallasTemperatureSensors::getReadings(std::vector<TemperatureReading> &readings)
 {
-    std::vector<TemperatureReading> readings(deviceCount);
+    readings.reserve(deviceCount);
     for (int i = 0; i < deviceCount; i++)
     {
         uint8_t *address;
@@ -53,9 +51,15 @@ std::vector<TemperatureReading> DallasTemperatureSensors::getReadings()
 
         float value = sensors.getTempC(address);
         if (value != DEVICE_DISCONNECTED_C)
-            readings.push_back(TemperatureReading{deviceAddressToString(address), value, Celsius});
+        {
+            TemperatureReading reading;
+            reading.unit = Unit::Celsius;
+            reading.temperatureValue = value;
+            deviceAddressToString(address, reading.sensorAddress);
+            readings.push_back(reading);
+        }
     }
-    return readings;
+    readings.shrink_to_fit();
 }
 
 void DallasTemperatureSensors::cacheAddresses()
@@ -63,7 +67,6 @@ void DallasTemperatureSensors::cacheAddresses()
     if (addresses != nullptr)
     {
         delete[] addresses;
-        addresses = nullptr;
     }
     addresses = new DeviceAddress[deviceCount];
     for (uint8_t i = 0; i < deviceCount; i++)

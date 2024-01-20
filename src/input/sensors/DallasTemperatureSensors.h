@@ -13,7 +13,7 @@ public:
 
     const bool isRefreshCompleted() override;
 
-    virtual std::vector<TemperatureReading> getReadings() override;
+    virtual void getReadings(std::vector<TemperatureReading> &readings) override;
 
 private:
     DallasTemperature sensors;
