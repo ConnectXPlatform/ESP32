@@ -1,8 +1,10 @@
 #include <Arduino.h>
 #include "ButtonHandler.h"
 
+#define digital_state_to_button_state(digitalState) (digitalState) == LOW ? State::Pressed : State::Released
+
 ButtonHandler::ButtonHandler(const uint8_t buttonPin, const unsigned long maxPressTime)
-    : buttonPin(buttonPin), maxPressTime(maxPressTime), onPressCallback(nullptr), onReleaseCallback(nullptr), isPressed(false)
+    : buttonPin(buttonPin), maxPressTime(maxPressTime), onPressCallback(nullptr), onReleaseCallback(nullptr), currentState(State::Released)
 {
 }
 
@@ -23,13 +25,16 @@ void ButtonHandler::setOnReleasedCallback(std::function<void()> callback)
 
 void ButtonHandler::pinStateChanged()
 {
-    uint8_t state = digitalRead(buttonPin);
-    bool newState = (state == LOW);
-    if (isPressed == newState)
-    {
+    State state = digital_state_to_button_state(digitalRead(buttonPin));
+    setState(state);
+}
+
+void ButtonHandler::setState(State newState)
+{
+    if (newState == currentState)
         return;
-    }
-    if (newState)
+
+    if (newState == State::Pressed)
     {
         if (onPressCallback)
             onPressCallback();
@@ -40,16 +45,14 @@ void ButtonHandler::pinStateChanged()
         if (onReleaseCallback)
             onReleaseCallback();
     }
-    isPressed = newState;
+    currentState = newState;
 }
 
 void ButtonHandler::update()
 {
-    if (isPressed && millis() >= pressEndTime)
+    if (currentState == State::Pressed && millis() >= pressEndTime)
     {
-        isPressed = false;
-        if (onReleaseCallback)
-            onReleaseCallback();
+        setState(State::Released);
     }
 }
 
