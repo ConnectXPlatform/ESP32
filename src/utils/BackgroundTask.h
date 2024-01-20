@@ -14,11 +14,11 @@ public:
     {
     }
 
-    const void start() override
+    void start() override
     {
         onStart();
     }
-    const bool update() override
+    bool update() override
     {
         if (millis() >= lastUpdateCall + delayBetweenUpdates)
         {

@@ -1,15 +1,17 @@
 #pragma once
+#include <Arduino.h>
 #include <queue>
 #include <vector>
 #include <mutex>
+#include <memory>
 
 class Task
 {
 public:
-    const virtual void start() = 0;
+    virtual void start() = 0;
     /// @brief Updates the task's state.
     /// @return true if the task is completed, and false otherwise.
-    const virtual bool update() = 0;
+    virtual bool update() = 0;
 };
 
 class TasksQueue
@@ -27,12 +29,12 @@ public:
 
     void start(BaseType_t coreId = 1 - ARDUINO_RUNNING_CORE);
 
-    void enqueueTask(Task &task);
+    void enqueueTask(std::unique_ptr<Task> task);
 
 private:
     std::mutex lock;
-    std::queue<std::reference_wrapper<Task>> pendingTasksQueue;
-    std::vector<std::reference_wrapper<Task>> executedTasks;
+    std::queue<std::unique_ptr<Task>> pendingTasksQueue;
+    std::vector<std::unique_ptr<Task>> executedTasks;
 
     TasksQueue() {}
 
