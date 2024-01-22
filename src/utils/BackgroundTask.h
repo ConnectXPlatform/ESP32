@@ -17,6 +17,7 @@ public:
     void start() override
     {
         onStart();
+        lastUpdateCall = 0;
     }
     bool update() override
     {
