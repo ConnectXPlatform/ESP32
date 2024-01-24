@@ -12,6 +12,13 @@ struct TemperatureReading
     char sensorAddress[50]; // Address or identifier of the sensor.
     float temperatureValue; // Temperature value.
     Unit unit;              // The value's unit of measurement.
+
+    TemperatureReading(){}
+    TemperatureReading(const char* address, float temperature, Unit unit) : temperatureValue(temperature), unit(unit)
+    {
+        strncpy(sensorAddress, address, sizeof(sensorAddress) - 1);
+        sensorAddress[sizeof(sensorAddress) - 1] = '\0';
+    }
 };
 
 class ITemperatureSensor
