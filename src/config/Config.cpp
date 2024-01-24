@@ -3,7 +3,7 @@
 
 #define DEFAULT_MQTT_PORT 1883
 
-MqttSettings &loadMqttSettings(Stream &jsonFile)
+MqttSettings loadMqttSettings(Stream &jsonFile)
 {
     // Size calculated using: https://arduinojson.org/v6/assistant (plus some buffer)
     StaticJsonDocument<200> jsonDoc;
@@ -32,7 +32,7 @@ MqttSettings &loadMqttSettings(Stream &jsonFile)
     return settings;
 }
 
-WifiSettings &loadWiFiSettings(Stream &jsonFile)
+WifiSettings loadWiFiSettings(Stream &jsonFile)
 {
     // Size calculated using: https://arduinojson.org/v6/assistant (plus some buffer)
     StaticJsonDocument<100> jsonDoc;
@@ -49,4 +49,22 @@ WifiSettings &loadWiFiSettings(Stream &jsonFile)
     settings.password = jsonDoc["password"].as<String>();
 
     return settings;
+}
+
+std::map<String, String> loadSensorsAdressesMap(Stream &jsonFile)
+{
+    StaticJsonDocument<512> jsonDoc;
+
+    DeserializationError error = deserializeJson(jsonDoc, jsonFile);
+    if (error)
+    {
+        throw std::runtime_error(error.c_str());
+    }
+
+    std::map<String, String> map;
+    for (auto entry : jsonDoc.as<JsonObject>())
+    {
+        map[entry.key().c_str()] = entry.value().as<String>();
+    }
+    return map;
 }

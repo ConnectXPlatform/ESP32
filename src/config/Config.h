@@ -1,5 +1,7 @@
 #pragma once
+#include <Arduino.h>
 #include <Stream.h>
+#include <map>
 
 /*
 Configuration files:
@@ -30,5 +32,7 @@ struct WifiSettings
     String password;
 };
 
-MqttSettings &loadMqttSettings(Stream &jsonFile);
-WifiSettings &loadWiFiSettings(Stream &jsonFile);
+MqttSettings loadMqttSettings(Stream &jsonFile);
+WifiSettings loadWiFiSettings(Stream &jsonFile);
+std::map<String, String> loadSensorsAdressesMap(Stream &jsonFile);
+
