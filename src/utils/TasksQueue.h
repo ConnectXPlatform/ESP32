@@ -1,8 +1,8 @@
 #pragma once
 #include <Arduino.h>
+#include <freertos/semphr.h>
 #include <queue>
 #include <vector>
-#include <mutex>
 #include <memory>
 
 class Task
@@ -31,12 +31,21 @@ public:
 
     void enqueueTask(std::unique_ptr<Task> task);
 
+    void update()
+    {
+        processPendingTasks();
+        removeCompletedTasks();
+    }
+
 private:
-    std::mutex lock;
+    SemaphoreHandle_t lock;
     std::queue<std::unique_ptr<Task>> pendingTasksQueue;
     std::vector<std::unique_ptr<Task>> executedTasks;
 
-    TasksQueue() {}
+    TasksQueue()
+    {
+        lock = xSemaphoreCreateMutex();
+    }
 
     void processPendingTasks();
 
@@ -47,8 +56,7 @@ private:
         TasksQueue *instance = static_cast<TasksQueue *>(parameter);
         while (true)
         {
-            instance->processPendingTasks();
-            instance->removeCompletedTasks();
+            instance->update();
             delay(1);
         }
     }

@@ -1,5 +1,25 @@
 #include "TasksQueue.h"
 
+class SemaphoreLock
+{
+public:
+    explicit SemaphoreLock(SemaphoreHandle_t &__s) : semaphore(__s)
+    {
+        xSemaphoreTake(__s, portMAX_DELAY);
+    }
+
+    ~SemaphoreLock()
+    {
+        xSemaphoreGive(semaphore);
+    }
+
+    SemaphoreLock(const SemaphoreLock &) = delete;
+    SemaphoreLock &operator=(const SemaphoreLock &) = delete;
+
+private:
+    SemaphoreHandle_t &semaphore;
+};
+
 void TasksQueue::start(BaseType_t coreId)
 {
     xTaskCreateUniversal(taskUpdateHandler, "tasks queue", getArduinoLoopTaskStackSize(), this, 1, NULL, coreId);
@@ -7,7 +27,7 @@ void TasksQueue::start(BaseType_t coreId)
 
 void TasksQueue::enqueueTask(std::unique_ptr<Task> task)
 {
-    std::lock_guard<std::mutex> _(lock);
+    SemaphoreLock _(lock);
     pendingTasksQueue.push(std::move(task));
 }
 
@@ -16,7 +36,7 @@ void TasksQueue::processPendingTasks()
     // Copy all the tasks that needs to be executed to a temporary queue
     std::queue<std::unique_ptr<Task>> pendingTasks;
     {
-        std::lock_guard<std::mutex> _(lock);
+        SemaphoreLock _(lock);
         // Move to the local queue
         while (!pendingTasksQueue.empty())
         {
