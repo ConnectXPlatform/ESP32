@@ -5,7 +5,7 @@
 
 #define USER_ID_LENGTH 28
 #define DEVICE_ID_LENGTH 20
-#define MAX_TOPIC_LENGTH 10
+#define MAX_TOPIC_LENGTH 30
 #define RESPONSE_STATUS_LENGTH 2
 
 struct MQTTMessage
@@ -30,7 +30,7 @@ class MQTTHandler
     using CallbackFunction = std::function<void(const MQTTMessage message)>;
 
 public:
-    MQTTHandler(const char *username, const char *deviceId, Client &client, uint8_t maxRetries = 5);
+    MQTTHandler(const char *deviceId, Client &client, uint8_t maxRetries = 5);
 
     void connect(const char *server, const uint16_t port);
 
@@ -59,8 +59,7 @@ private:
 
     PubSubClient mqttClient;
     const uint8_t maxRetries;
-    const char userid[USER_ID_LENGTH + 1]; // Add 1 for the null-terminating character.
-    const char deviceId[DEVICE_ID_LENGTH + 1];
+    const char deviceId[DEVICE_ID_LENGTH + 1]; // Add 1 for the null-terminating character.
     std::map<const char *, CallbackFunction, cmp_str> topicCallbacks;
     char *errorMessage;
 

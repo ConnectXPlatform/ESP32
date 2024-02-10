@@ -1,44 +1,66 @@
 #include <Arduino.h>
 #include <string.h>
 #include "MqttHandler.h"
+#include "FirebaseAuth.h"
 #include "../utils/StringUtils.h"
 
-const char *connectionData = "{}";
+const char *connectionData PROGMEM = "{}";
 
 char *stateToMessage(int state)
 {
     // Source: https://pubsubclient.knolleary.net/api#state
     switch (state)
     {
-    case -4:
+    case MQTT_CONNECTION_TIMEOUT:
         return "The server didn't respond within the keepalive time";
-    case -3:
+    case MQTT_CONNECTION_LOST:
         return "The network connection was broken";
-    case -2:
+    case MQTT_CONNECT_FAILED:
         return "The network connection failed";
-    case -1:
+    case MQTT_DISCONNECTED:
         return "The client is disconnected cleanly";
-    case 0:
+    case MQTT_CONNECTED:
         return "The client is connected";
-    case 1:
+    case MQTT_CONNECT_BAD_PROTOCOL:
         return "The server doesn't support the requested version of MQTT";
-    case 2:
+    case MQTT_CONNECT_BAD_CLIENT_ID:
         return "The server rejected the client identifier";
-    case 3:
+    case MQTT_CONNECT_UNAVAILABLE:
         return "The server was unable to accept the connection";
-    case 4:
+    case MQTT_CONNECT_BAD_CREDENTIALS:
         return "The username/password were rejected";
-    case 5:
+    case MQTT_CONNECT_UNAUTHORIZED:
         return "The client was not authorized to connect";
     default:
         return "Unknown error";
     }
 }
 
-MQTTHandler::MQTTHandler(const char *username, const char *deviceId, Client &client, uint8_t maxRetries)
-    : mqttClient(client), maxRetries(maxRetries), userid(), deviceId(), topicCallbacks()
+void connectToMqtt(PubSubClient &mqttClient, const char *clientId, const char *deviceId, uint8_t maxRetries)
 {
-    strncpy(const_cast<char *>(this->userid), username, USER_ID_LENGTH + 1);
+    uint8_t retriesLeft = maxRetries;
+    mqttClient.setBufferSize(2048);
+    do
+    {
+        Serial.println(F("Attempting MQTT reconnection..."));
+        // Attempt to connect
+        if (!mqttClient.connect(clientId, deviceId, Auth.getAuthToken()))
+        {
+            Serial.print(F("failed, error="));
+            Serial.println(stateToMessage(mqttClient.state()));
+            Serial.println(F("Retrying in 5 seconds"));
+            // Wait 5 seconds before retrying
+            delay(5000);
+        }
+        retriesLeft--;
+        Serial.printf("Retries left: %d\n", retriesLeft);
+    } while (!mqttClient.connected() && retriesLeft > 0);
+    mqttClient.setBufferSize(256);
+}
+
+MQTTHandler::MQTTHandler(const char *deviceId, Client &client, uint8_t maxRetries)
+    : mqttClient(client), maxRetries(maxRetries), deviceId(), topicCallbacks()
+{
     strncpy(const_cast<char *>(this->deviceId), deviceId, DEVICE_ID_LENGTH + 1);
     // Register the callback
     mqttClient.setCallback([this](char *topic, uint8_t *payload, unsigned int payloadLength)
@@ -54,28 +76,13 @@ void MQTTHandler::connect(const char *server, const uint16_t port)
     mqttClient.setServer(server, port);
     // Client id format is {user_id}_{device_id}
     char clientId[USER_ID_LENGTH + DEVICE_ID_LENGTH + 2] = {0};
-    snprintf(clientId, USER_ID_LENGTH + DEVICE_ID_LENGTH + 2, "%s_%s", userid, deviceId);
-    Serial.print(F("Connecting as: "));
-    Serial.println(clientId);
-
-    uint8_t retriesLeft = maxRetries;
-    do
-    {
-        Serial.println(F("Attempting MQTT connection..."));
-        if (!mqttClient.connect(clientId, userid, deviceId))
-        {
-            Serial.print(F("failed, error="));
-            Serial.println(stateToMessage(mqttClient.state()));
-            Serial.println(F("Retrying in 5 seconds"));
-            // Wait 5 seconds before retrying
-            delay(5000);
-        }
-        retriesLeft--;
-        Serial.printf("Retries left: %d\n", retriesLeft);
-    } while (!isConnected() && retriesLeft > 0);
+    snprintf(clientId, USER_ID_LENGTH + DEVICE_ID_LENGTH + 2, "%s_%s", Auth.getUserId(), deviceId);
+    connectToMqtt(mqttClient, clientId, deviceId, maxRetries);
     errorMessage = stateToMessage(mqttClient.state());
     if (isConnected())
         broadcast("Connected", connectionData, true);
+    else
+        ESP.restart();
 }
 
 void MQTTHandler::broadcast(const char *topic, const char *payload, const bool retain)
@@ -83,16 +90,16 @@ void MQTTHandler::broadcast(const char *topic, const char *payload, const bool r
     // Full topic: <user_id>/ALL/<sender_device_id>/<payload_format>/<topic>
     // Full topic length: USER_ID_LENGTH + strlen("/ALL/") + DEVICE_ID_LENGTH + strlen("/json/") + MAX_TOPIC_LENGTH + 1 (for '\0')
     char buffer[USER_ID_LENGTH + 4 + DEVICE_ID_LENGTH + 6 + MAX_TOPIC_LENGTH + 1] = {0};
-    snprintf(buffer, sizeof(buffer), "%s/ALL/%s/json/%s", userid, deviceId, topic);
+    snprintf(buffer, sizeof(buffer), "%s/ALL/%s/json/%s", Auth.getUserId(), deviceId, topic);
     mqttClient.publish(buffer, payload, retain);
 }
 
-void MQTTHandler::respond(const MQTTMessage& message, const char *payload, const ResponseStatus status)
+void MQTTHandler::respond(const MQTTMessage &message, const char *payload, const ResponseStatus status)
 {
     // Full topic: <user_id>/<device_id>/<message_id>/<payload_format>/<topic>/<response_status>
     // Full topic length: USER_ID_LENGTH + DEVICE_ID_LENGTH + strlen(messageId) + strlen("/json/") + MAX_TOPIC_LENGTH + RESPONSE_STATUS_LENGTH + 3 (for every '/') + 1 (for '\0')
     char buffer[USER_ID_LENGTH + DEVICE_ID_LENGTH + strlen(message.messageId) + 6 + MAX_TOPIC_LENGTH + RESPONSE_STATUS_LENGTH + 3 + 1] = {0};
-    snprintf(buffer, sizeof(buffer), "%s/%s/%s/json/%s/%02x", userid, deviceId, message.messageId, message.topic, status);
+    snprintf(buffer, sizeof(buffer), "%s/%s/%s/json/%s/%02x", Auth.getUserId(), deviceId, message.messageId, message.topic, status);
     mqttClient.publish(buffer, payload);
 }
 
@@ -102,7 +109,7 @@ void MQTTHandler::subscribe(const char *topic, CallbackFunction callback)
     // Topic with wildcards: <user_id>/<device_id>/+/+/<topic>
     // Topic with wildcards length: USER_ID_LENGTH + DEVICE_ID_LENGTH + strlen("/+/+/") + MAX_TOPIC_LENGTH + 1 (for every '/') + 1 (for '\0')
     char buffer[USER_ID_LENGTH + DEVICE_ID_LENGTH + 5 + MAX_TOPIC_LENGTH + 1 + 1] = {0};
-    snprintf(buffer, sizeof(buffer), "%s/%s/+/+/%s", userid, deviceId, topic);
+    snprintf(buffer, sizeof(buffer), "%s/%s/+/+/%s", Auth.getUserId(), deviceId, topic);
 
     Serial.print(F("Subscribing to: "));
     Serial.println(buffer);
@@ -114,36 +121,25 @@ void MQTTHandler::subscribe(const char *topic, CallbackFunction callback)
 
 void MQTTHandler::update()
 {
-    // Serial.println(stateToMessage(mqttClient.state()));
     if (!mqttClient.loop())
+    {
+        Serial.println(stateToMessage(mqttClient.state()));
         reconnect();
+    }
 }
 
 void MQTTHandler::reconnect()
 {
     // Client id format is {user_id}_{device_id}
     char clientId[USER_ID_LENGTH + DEVICE_ID_LENGTH + 2] = {0};
-    snprintf(clientId, USER_ID_LENGTH + DEVICE_ID_LENGTH + 2, "%s_%s", userid, deviceId);
+    snprintf(clientId, USER_ID_LENGTH + DEVICE_ID_LENGTH + 2, "%s_%s", Auth.getUserId(), deviceId);
     Serial.println(F("Reconnecting to MQTT broker..."));
-    uint8_t retriesLeft = maxRetries;
-    do
-    {
-        Serial.println(F("Attempting MQTT reconnection..."));
-        // Attempt to connect
-        if (!mqttClient.connect(clientId, userid, deviceId))
-        {
-            Serial.print(F("failed, error="));
-            Serial.println(stateToMessage(mqttClient.state()));
-            Serial.println(F("Retrying in 5 seconds"));
-            // Wait 5 seconds before retrying
-            delay(5000);
-        }
-        retriesLeft--;
-        Serial.printf("Retries left: %d\n", retriesLeft);
-    } while (!isConnected() && retriesLeft > 0);
+    connectToMqtt(mqttClient, clientId, deviceId, maxRetries);
     errorMessage = stateToMessage(mqttClient.state());
     if (isConnected())
         broadcast("Connected", connectionData, true);
+    else
+        ESP.restart();
 }
 
 bool MQTTHandler::isConnected()

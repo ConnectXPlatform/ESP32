@@ -6,7 +6,7 @@
 MqttSettings loadMqttSettings(Stream &jsonFile)
 {
     // Size calculated using: https://arduinojson.org/v6/assistant (plus some buffer)
-    StaticJsonDocument<200> jsonDoc;
+    StaticJsonDocument<100> jsonDoc;
 
     DeserializationError error = deserializeJson(jsonDoc, jsonFile);
     if (error)
@@ -16,7 +16,6 @@ MqttSettings loadMqttSettings(Stream &jsonFile)
 
     MqttSettings settings;
 
-    settings.userId = jsonDoc["userId"].as<String>();
     settings.deviceId = jsonDoc["deviceId"].as<String>();
     settings.serverURL = jsonDoc["serverURL"].as<String>();
     uint16_t port;
@@ -47,6 +46,26 @@ WifiSettings loadWiFiSettings(Stream &jsonFile)
 
     settings.ssid = jsonDoc["ssid"].as<String>();
     settings.password = jsonDoc["password"].as<String>();
+
+    return settings;
+}
+
+FirebaseSettings loadFirebaseSettingsSettings(Stream &jsonFile)
+{
+    // Size calculated using: https://arduinojson.org/v6/assistant (plus some buffer)
+    StaticJsonDocument<100> jsonDoc;
+
+    DeserializationError error = deserializeJson(jsonDoc, jsonFile);
+    if (error)
+    {
+        throw std::runtime_error(error.c_str());
+    }
+
+    FirebaseSettings settings;
+
+    settings.email = jsonDoc["email"].as<String>();
+    settings.password = jsonDoc["password"].as<String>();
+    settings.apiKey = jsonDoc["apiKey"].as<String>();
 
     return settings;
 }
