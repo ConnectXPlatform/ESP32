@@ -48,6 +48,8 @@ public:
 
     const char *getErrorMessage();
 
+    void disposeMessage(const MQTTMessage &message);
+
 private:
     struct cmp_str
     {

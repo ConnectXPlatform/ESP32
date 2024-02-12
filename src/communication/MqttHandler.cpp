@@ -42,7 +42,7 @@ void connectToMqtt(PubSubClient &mqttClient, const char *clientId, const char *d
     mqttClient.setBufferSize(2048);
     do
     {
-        Serial.println(F("Attempting MQTT reconnection..."));
+        Serial.println(F("Attempting MQTT connection..."));
         // Attempt to connect
         if (!mqttClient.connect(clientId, deviceId, Auth.getAuthToken()))
         {
@@ -55,7 +55,7 @@ void connectToMqtt(PubSubClient &mqttClient, const char *clientId, const char *d
         retriesLeft--;
         Serial.printf("Retries left: %d\n", retriesLeft);
     } while (!mqttClient.connected() && retriesLeft > 0);
-    mqttClient.setBufferSize(256);
+    mqttClient.setBufferSize(1024);
 }
 
 MQTTHandler::MQTTHandler(const char *deviceId, Client &client, uint8_t maxRetries)
@@ -72,7 +72,6 @@ void MQTTHandler::connect(const char *server, const uint16_t port)
     if (mqttClient.connected())
         return;
 
-    Serial.println(F("Connecting MQTT"));
     mqttClient.setServer(server, port);
     // Client id format is {user_id}_{device_id}
     char clientId[USER_ID_LENGTH + DEVICE_ID_LENGTH + 2] = {0};
@@ -96,11 +95,15 @@ void MQTTHandler::broadcast(const char *topic, const char *payload, const bool r
 
 void MQTTHandler::respond(const MQTTMessage &message, const char *payload, const ResponseStatus status)
 {
-    // Full topic: <user_id>/<device_id>/<message_id>/<payload_format>/<topic>/<response_status>
+    // Full topic: <user_id>/<device_id>/<message_id>/<payload_format>/<response_status>/<topic>
     // Full topic length: USER_ID_LENGTH + DEVICE_ID_LENGTH + strlen(messageId) + strlen("/json/") + MAX_TOPIC_LENGTH + RESPONSE_STATUS_LENGTH + 3 (for every '/') + 1 (for '\0')
     char buffer[USER_ID_LENGTH + DEVICE_ID_LENGTH + strlen(message.messageId) + 6 + MAX_TOPIC_LENGTH + RESPONSE_STATUS_LENGTH + 3 + 1] = {0};
-    snprintf(buffer, sizeof(buffer), "%s/%s/%s/json/%s/%02x", Auth.getUserId(), deviceId, message.messageId, message.topic, status);
-    mqttClient.publish(buffer, payload);
+    snprintf(buffer, sizeof(buffer), "%s/%s/%s/json/%02x/%s", Auth.getUserId(), deviceId, message.messageId, status, message.topic);
+    if (status != ResponseStatus::InProgress)
+    {
+        disposeMessage(message);
+    }
+    boolean result = mqttClient.publish(buffer, payload);
 }
 
 void MQTTHandler::subscribe(const char *topic, CallbackFunction callback)
@@ -110,9 +113,6 @@ void MQTTHandler::subscribe(const char *topic, CallbackFunction callback)
     // Topic with wildcards length: USER_ID_LENGTH + DEVICE_ID_LENGTH + strlen("/+/+/") + MAX_TOPIC_LENGTH + 1 (for every '/') + 1 (for '\0')
     char buffer[USER_ID_LENGTH + DEVICE_ID_LENGTH + 5 + MAX_TOPIC_LENGTH + 1 + 1] = {0};
     snprintf(buffer, sizeof(buffer), "%s/%s/+/+/%s", Auth.getUserId(), deviceId, topic);
-
-    Serial.print(F("Subscribing to: "));
-    Serial.println(buffer);
 
     mqttClient.subscribe(buffer);
 
@@ -136,10 +136,16 @@ void MQTTHandler::reconnect()
     Serial.println(F("Reconnecting to MQTT broker..."));
     connectToMqtt(mqttClient, clientId, deviceId, maxRetries);
     errorMessage = stateToMessage(mqttClient.state());
-    if (isConnected())
-        broadcast("Connected", connectionData, true);
-    else
+    if (!isConnected())
         ESP.restart();
+    broadcast("Connected", connectionData, true);
+    // Resubscribe to all the topics
+    char buffer[USER_ID_LENGTH + DEVICE_ID_LENGTH + 5 + MAX_TOPIC_LENGTH + 1 + 1] = {0};
+    for (const auto topicCallbackPair : topicCallbacks)
+    {
+        snprintf(buffer, sizeof(buffer), "%s/%s/+/+/%s", Auth.getUserId(), deviceId, topicCallbackPair.first);
+        mqttClient.subscribe(buffer);
+    }
 }
 
 bool MQTTHandler::isConnected()
@@ -152,28 +158,31 @@ const char *MQTTHandler::getErrorMessage()
     return errorMessage;
 }
 
+void MQTTHandler::disposeMessage(const MQTTMessage &message)
+{
+    delete[] message.messageId;
+    delete[] message.topic;
+}
+
 void MQTTHandler::callback(char *fullTopic, uint8_t *payload, unsigned int payloadLength)
 {
-    Serial.println("Got message!");
     const String payloadAsJson = String(payload, payloadLength);
-    Serial.print(F("Received payload: "));
-    Serial.println(payloadAsJson);
     // The full topic format: "<user_id>/<device_id>/<message_id>/<format>/<topic>"
     const char *topicSegments[5];
     uint segmentsLengths[5];
     splitString(fullTopic, '/', topicSegments, segmentsLengths, 5);
 
-    Serial.printf("Topic length: %d\n", segmentsLengths[4]);
-    char topic[segmentsLengths[4] + 1] = {0};
+    char *topic = new char[segmentsLengths[4] + 1];
     strncpy(topic, topicSegments[4], segmentsLengths[4]);
+    topic[segmentsLengths[4]] = 0;
     auto it = topicCallbacks.find(topic);
     if (it == topicCallbacks.end())
     {
         Serial.printf(PSTR("Unknown topic: %s\n"), topic);
         return;
     }
-    Serial.printf("Message id length: %d\n", segmentsLengths[2]);
-    char messageId[segmentsLengths[2] + 1] = {0};
+    char *messageId = new char[segmentsLengths[2] + 1];
     strncpy(messageId, topicSegments[2], segmentsLengths[2]);
+    messageId[segmentsLengths[2]] = 0;
     it->second(MQTTMessage{messageId, deviceId, topic, payloadAsJson});
 }
